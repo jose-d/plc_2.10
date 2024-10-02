@@ -5,79 +5,56 @@
 # $> make install
 
 # to install the optional python utilities
-# $> make python_install
+# $> make install_python
 
 # cleanup
 # $> make clean
 
-# here are the thing that you should modify 
+# Makefile is customized to work with Easybuid and its env vars
 ################################################################################################
 
 # set your prefix to where you want to install clik.
 # default is to let it in the current directory
 PREFIX := $(shell pwd)
 
-# set the path of the cfitsio lib. 
-# bewared that cfitsio must have been compiled with the option "make shared"
-CFITSIOPATH := /usr/local
-#CFITSIOPATH := /softs/cfitsio/3.24
-# you have a CFITSIO lib in a weird location, also set those
+# set the path of the cfitsio lib.
+# we use Easybuild environment variables here:
+
+CFITSIOPATH := ${EBROOTCFITSIO}
 CFITSIO_INCPATH := $(CFITSIOPATH)/include
 CFITSIO_LIBPATH := $(CFITSIOPATH)/lib
 
-#define your compilers and stuff
+# we go with gcc and gfortran
 CC = gcc
-FC = ifort
-#FC = gfortran
+FC = gfortran
 
 # ifort
-# if you are using ifort set here where its lib are installed
-# and check the runtime libs
-# PLEASE note that gcc 4.9 and ifort <14.0.4 have an imcompativbility
-# (see https://software.intel.com/en-us/articles/gcc-49-openmp-code-cannot-be-linked-with-intel-openmp-runtime)
-
-# on my mac I got
-IFORTLIBPATH = /usr/bin/ifort-2011-base/compiler/lib
-IFORTRUNTIME = -L$(IFORTLIBPATH) -lintlc -limf -lsvml -liomp5 -lifportmt -lifcoremt -lpthread
-
-# on a linux machine, ifort 11.1
-#IFORTLIBPATH = /softs/intel/fce/11.1.075/lib/intel64
-#IFORTRUNTIME = -L$(IFORTLIBPATH) -lintlc -limf -lsvml -liomp5 -lifport -lifcoremt -lpthread
-
-# on a linux machine, ifort 14.0
-#IFORTLIBPATH = /softs/intel/xe/composer_xe_2013_sp1.1.106/compiler/lib/intel64
-#IFORTRUNTIME = -L$(IFORTLIBPATH) -lintlc -limf -lsvml -liomp5 -lifport -lifcoremt -lirc -lpthread
+# - here we keep the vars empty
+IFORTLIBPATH =
+IFORTRUNTIME =
 
 # gfortran
-# if you are using gfortran set here where the lib are installed
-# and check the runtime libs
-GFORTRANLIBPATH = /usr/lib
+
+GFORTRANLIBPATH = ${EBROOTGCC}/lib
 GFORTRANRUNTIME = -L$(GFORTRANLIBPATH) -lgfortran -lgomp
 
-# if you are on linux and using mkl, you need to set this 
+# we use GNU toolchain so keeping MKL-related variables empty:
 MKLROOT = 
-LAPACKLIBPATHMKL = 
-#some example
-#MKLROOT = /softs/intel/mkl/10.2.6.038/
-# on mkl 10.3
-#LAPACKLIBPATHMKL = -L$(MKLROOT)/lib/intel64
-# on mkl 10.2
-#LAPACKLIBPATHMKL = -L$(MKLROOT)/lib/em64t
+LAPACKLIBPATHMKL =
 
-#if you want to point to your own version of lapack set the following variables
-#LAPACK = -L/some/path -lsomefortranlapack -lsomedependencyforyourlapack
-#LAPACKLIBPATH = /some/path
+# and set directory to ScaLAPACK
 
+LAPACK = -L${EBROOTSCALAPACK}/lib -lscalapack
+LAPACKLIBPATH = ${EBROOTSCALAPACK}/lib
 
 # pretty colors (comment to remove pretty colors or try to change echo to echo -e)
-COLORS = 1
+COLORS = 0
 
 #set echo to echo -e to have colourized output on some shell
 ECHO = echo 
 
 
 # what is the openmp option for your C compiler (leave empty to compile without openmp)
-#COPENMP =
 COPENMP = -fopenmp
 # what is the openmp option for your F90 compiler (leave empty to cmpile without openmp)
 FOPENMP = -openmp
@@ -92,11 +69,14 @@ FM64 =
 #FM64 = -arch x86_64 #macos
 #FM64 = -m64
 
-# set the variable to the python cli to compile and install the python tools
-PYTHON = python
+# here we set python3 just for sure
+PYTHON = python3
 
 
 ################################################################################################
+
+PYTHONPATH_ORIG := ${PYTHONPATH}
+
 
 # you should not need to modify anything below
 
@@ -111,6 +91,7 @@ INSTALL = install
 
 # get the os
 UNAME := $(shell uname -s)
+UNAMEARCH := $(shell uname -m)
 
 ifeq ($(UNAME),Darwin)
 OS = macos
@@ -118,81 +99,42 @@ else
 OS = linux
 endif
 
-#defines for macos
-SOMACOS = dylib
-LIBPATHNAMEMACOS = DYLD_LIBRARY_PATH
-#defines for linux
 SOLINUX = so
 LIBPATHNAMELINUX = LD_LIBRARY_PATH
 
-ifeq ($(OS),macos)
-SO = $(SOMACOS)
-LIBPATHNAME = $(LIBPATHNAMEMACOS)
-else
 SO = $(SOLINUX)
 LIBPATHNAME = $(LIBPATHNAMELINUX)
-endif
-
-#ifort
-IFORTMODULEPATH = -module
 
 #gfortran
 GFORTRANMODULEPATH = -J
 
-# this picks either ifort or gfortran, change those lines to set FRUNTIME and FMODULEPATH for your special case
-ifeq ($(FC),ifort)
-FLIBPATH = $(IFORTLIBPATH)
-FRUNTIME = $(IFORTRUNTIME)
-FMODULEPATH = $(IFORTMODULEPATH)
-FFLAGS =
-else
 FLIBPATH = $(GFORTRANLIBPATH)
 FRUNTIME = $(GFORTRANRUNTIME)
 FMODULEPATH = $(GFORTRANMODULEPATH)
 FFLAGS = -ffree-line-length-0
-endif
-
 
 # some defines (shared, relocatable openmp, etc)
 CFPIC = -fPIC
 FFPIC = -fPIC
 
 # check here that the SHARED variable contain the correct invocation for your CC
-ifeq ($(OS),macos)
-SHARED = -dynamiclib
-else
 SHARED = -shared -Bdynamic
-endif
 
 # get version of the code from the svn version
 VERSION = $(strip $(shell cat svnversion)) MAKEFILE
 #VERSION = MAKEFILE
 
-# some more defines
-#macos
-DEFINESMACOS = -D HAS_RTLD_DEFAULT
-#linux
+# some more defines - linux
 DEFINESLINUX = 
 
 DEFINESCOMMON = -D HAS_LAPACK -D LAPACK_CLIK -D NOHEALPIX -D CLIK_LENSING -D 'CLIKSVNVERSION="$(VERSION)"' -D CAMSPEC_V1
 
-
-ifeq ($(OS),macos)
-DEFINES = $(DEFINESMACOS) $(DEFINESCOMMON)
-ifndef CM64
-CM64 = -arch x86_64
-endif
-ifndef FM64
-FM64 = -arch x86_64
-endif
-else
 DEFINES = $(DEFINESLINUX) $(DEFINESCOMMON)
 ifndef CM64
 CM64 = -m64
 endif
 ifndef FM64
 FM64 = -m64
-endif
 endif
 
 INCLUDES = -I$(CFITSIO_INCPATH)
@@ -203,16 +145,6 @@ FFLAGS += $(FM64) $(FOPENMP) $(FFPIC) $(DEFINES) $(FMODULEPATH) $(ODIR)
 
 
 # Lapack section
-
-#macos I advise you to use the builtin blas lapack that are reasonnably efficient
-LAPACKLIBPATHMACOS = /System/Library/Frameworks/Accelerate.framework/Versions/Current/Frameworks/vecLib.framework/Versions/Current
-LAPACKMACOS = -L$(LAPACKLIBPATHMACOS) -lBLAS -lLAPACK
-
-# mkl I am assuming that the env variable MKLROOT contains the MKL root path
-# if not define it here
-
-LAPACKMKLCORELIB = -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
-LAPACKMKL = -L$(LAPACKLIBPATHMKL) $(LAPACKMKLCORELIB)  -liomp5 -lpthread -lm
 
 #LAPACK_FUNC := dtrsv  dpotrf  dpotrs  dpotri  dtrtri  dtrmm  dtrmv  dgeqrf  dormqr  dsyev  dgesvd  dsymv  dgemv  dgemm  dsyrk  dsyr2k  daxpy  dtrsm  dsymm  dsyr  ddot
 LAPACK_FUNC = $(shell python -c"print(\" \".join(open(\"waf_tools/lapack_funcs.txt\").read().strip().split()))")
@@ -317,7 +249,8 @@ install: $(BDIR)/libclik.$(SO) $(BDIR)/libclik_f90.$(SO) $(BDIR)/clik_example_C 
 	@$(ECHO) "$(PINK_COLOR)*----------------------------------------------------*\n$(NO_COLOR)"
 
 ifdef PYTHON
-PYTHONPATH = $(PREFIX)/lib/`$(PYTHON) -c"import sys;print('python%s/site-packages'%sys.version[0:3])"`
+PYLIBDIR := $(shell python -c"import sys;print('python%s/site-packages'%('.'.join(sys.version.split('.')[:2])))")
+PYTHONPATH := $(PREFIX)/lib/$(PYLIBDIR)
 PYTHONEXE := `which $(PYTHON)`
 else
 PYTHONPATH := 
@@ -388,6 +321,7 @@ $(ODIR)/.print_info: |$(ODIR)
 	@$(ECHO) "$(BLUE_COLOR)Using the following lapack link line:$(NO_COLOR) $(LAPACK)"
 	@$(ECHO) "$(BLUE_COLOR)Using the following cfitsio link line:$(NO_COLOR) $(CFITSIO)"
 	@$(ECHO) "$(BLUE_COLOR)Using the following fortran runtime link line:$(NO_COLOR) $(FRUNTIME)"
+	@$(ECHO) "$(BLUE_COLOR)Using the following openmp link line:$(NO_COLOR) $(COPENMP_LIB)"
 	@$(ECHO) "$(BLUE_COLOR)Build dir:$(NO_COLOR) $(BDIR)"
 	@$(ECHO)
 	@touch $(@)
@@ -395,7 +329,8 @@ $(ODIR)/.print_info: |$(ODIR)
 PYTOOLS := $(shell cd src/python/tools/;ls *.py;cd ../../../)
 
 install_python: install $(addprefix $(ODIR)/, $(PYTOOLS)) |$(ODIR)
-	@LINK_CLIK="$(LDFLAG) $(LAPACK) -L$(PREFIX)/lib -lclik " $(PYTHON) setup.py build --build-base=$(ODIR) install --install-lib=$(PYTHONPATH)
+	$(info PYTHONPATH=$(PYTHONPATH):$(PYTHONPATH_ORIG) LINK_CLIK="$(LDFLAG) $(LAPACK) -L$(PREFIX)/lib -lclik " $(PYTHON) -m pip  install . --prefix=.)
+	PYTHONPATH=$(PYTHONPATH):$(PYTHONPATH_ORIG) LINK_CLIK="$(LDFLAG) $(LAPACK) -L$(PREFIX)/lib -lclik " $(PYTHON) -m pip  install . --prefix=.
 	@$(ECHO) "\n$(PINK_COLOR)*----------------------------------------------------*"
 	@$(ECHO) "$(PINK_COLOR)|$(NO_COLOR)                                                    $(PINK_COLOR)|"
 	@$(ECHO) "$(PINK_COLOR)|$(NO_COLOR)   Source clik_profile.sh (or clik_profile.csh)     $(PINK_COLOR)|"
